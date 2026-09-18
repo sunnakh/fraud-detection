@@ -1,0 +1,35 @@
+# Local Python environments
+.venv/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Test, type-check, and lint caches
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Downloaded data and generated ML artifacts
+data/raw/
+data/interim/
+data/processed/
+artifacts/
+models/
+mlruns/
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+.codex
