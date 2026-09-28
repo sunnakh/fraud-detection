@@ -29,6 +29,9 @@ models/
 mlruns/
 backups/
 
+# Exploration notebooks; outputs can contain data rows
+notebooks/
+
 # Editor and operating-system files
 .DS_Store
 .idea/
