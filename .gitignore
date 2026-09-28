@@ -27,6 +27,7 @@ data/processed/
 artifacts/
 models/
 mlruns/
+backups/
 
 # Editor and operating-system files
 .DS_Store
