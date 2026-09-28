@@ -15,6 +15,31 @@ class ScoreStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class ScoreKind(StrEnum):
+    """Original results are immutable; replays are separate later records."""
+
+    ORIGINAL = "original"
+    REPLAY = "replay"
+
+
+class UnavailableReason(StrEnum):
+    """Machine-readable reasons a valid transaction was not scored."""
+
+    LATE = "late"
+    FEATURE_FAILURE = "feature_failure"
+    MODEL_UNAVAILABLE = "model_unavailable"
+
+
+class HistoryStatus(StrEnum):
+    """Explicit cold start instead of an implicit zero history."""
+
+    NO_HISTORY = "no_history"
+    HAS_HISTORY = "has_history"
+
+
+RANKING_SEMANTICS = "ranking"
+
+
 @dataclass(frozen=True, slots=True)
 class DatasetManifest:
     """Identity and time boundary for a reproducible logical dataset."""
@@ -55,24 +80,26 @@ class DatasetManifest:
 
 @dataclass(frozen=True, slots=True)
 class ScoreResult:
-    """Traceable scoring result with deliberately uncommitted semantics."""
+    """Traceable scoring result; never carries a payment action."""
 
     transaction_id: str
     scored_at: datetime
     status: ScoreStatus
     score: float | None
     score_semantics: str | None
-    model_version: str
-    feature_version: str
-    reason: str | None = None
+    model_version: str | None
+    feature_version: str | None
+    reason: UnavailableReason | None = None
+    kind: ScoreKind = ScoreKind.ORIGINAL
 
     def __post_init__(self) -> None:
+        if not self.transaction_id.strip():
+            raise ValueError("transaction_id must not be blank")
         for field_name, value in (
-            ("transaction_id", self.transaction_id),
             ("model_version", self.model_version),
             ("feature_version", self.feature_version),
         ):
-            if not value.strip():
+            if value is not None and not value.strip():
                 raise ValueError(f"{field_name} must not be blank")
         object.__setattr__(
             self,
@@ -90,7 +117,18 @@ class ScoreResult:
                 raise ValueError("score_semantics must not be blank")
             if self.reason is not None:
                 raise ValueError("available scores must not include a failure reason")
+            if self.model_version is None:
+                raise ValueError("available scores require a model_version")
+            if self.feature_version is None:
+                raise ValueError("available scores require a feature_version")
         elif self.score is not None or self.score_semantics is not None:
             raise ValueError("unavailable results must not manufacture a score")
-        elif self.reason is None or not self.reason.strip():
+        elif self.reason is None:
             raise ValueError("unavailable results require a reason")
+        else:
+            try:
+                reason = UnavailableReason(self.reason)
+            except ValueError as exc:
+                allowed = ", ".join(r.value for r in UnavailableReason)
+                raise ValueError(f"reason must be one of: {allowed}") from exc
+            object.__setattr__(self, "reason", reason)

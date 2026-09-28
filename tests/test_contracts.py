@@ -2,7 +2,14 @@ from datetime import UTC, datetime
 
 import pytest
 
-from fraud_detection.contracts import DatasetManifest, ScoreResult, ScoreStatus
+from fraud_detection.contracts import (
+    DatasetManifest,
+    HistoryStatus,
+    ScoreKind,
+    ScoreResult,
+    ScoreStatus,
+    UnavailableReason,
+)
 
 
 def instant() -> datetime:
@@ -43,7 +50,7 @@ def test_unavailable_result_cannot_contain_a_score() -> None:
             score_semantics="unapproved-ranking-value",
             model_version="model-v1",
             feature_version="features-v1",
-            reason="model unavailable",
+            reason=UnavailableReason.MODEL_UNAVAILABLE,
         )
 
 
@@ -100,3 +107,62 @@ def test_available_result_requires_nonblank_semantics() -> None:
             model_version="model-v1",
             feature_version="features-v1",
         )
+
+
+def test_unavailable_reason_must_be_machine_readable() -> None:
+    with pytest.raises(ValueError, match="late"):
+        ScoreResult(
+            transaction_id="tx-1",
+            scored_at=instant(),
+            status=ScoreStatus.UNAVAILABLE,
+            score=None,
+            score_semantics=None,
+            model_version=None,
+            feature_version=None,
+            reason="free text",  # type: ignore[arg-type]
+        )
+
+
+def test_feature_failure_needs_no_model_version() -> None:
+    result = ScoreResult(
+        transaction_id="tx-1",
+        scored_at=instant(),
+        status=ScoreStatus.UNAVAILABLE,
+        score=None,
+        score_semantics=None,
+        model_version=None,
+        feature_version=None,
+        reason=UnavailableReason.FEATURE_FAILURE,
+    )
+    assert result.kind is ScoreKind.ORIGINAL
+
+
+def test_available_score_requires_versions() -> None:
+    with pytest.raises(ValueError, match="model_version"):
+        ScoreResult(
+            transaction_id="tx-1",
+            scored_at=instant(),
+            status=ScoreStatus.AVAILABLE,
+            score=1.5,
+            score_semantics="ranking",
+            model_version=None,
+            feature_version="cust_hist_v1",
+        )
+
+
+def test_replay_kind_is_explicit() -> None:
+    result = ScoreResult(
+        transaction_id="tx-1",
+        scored_at=instant(),
+        status=ScoreStatus.AVAILABLE,
+        score=-2.0,
+        score_semantics="ranking",
+        model_version="m1",
+        feature_version="cust_hist_v1",
+        kind=ScoreKind.REPLAY,
+    )
+    assert result.kind is ScoreKind.REPLAY
+
+
+def test_history_status_values() -> None:
+    assert {s.value for s in HistoryStatus} == {"no_history", "has_history"}
