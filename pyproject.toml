@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Transaction fraud risk scoring system"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "numpy>=2.5.3",
+    "pandas>=3.0.6",
+    "pyarrow>=25.0.1",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.15,<0.13"]
@@ -13,6 +17,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "mypy>=2.3.1",
+    "pandas-stubs>=3.0.5.260914",
     "pytest>=9.1.1",
     "ruff>=0.16.8",
 ]
@@ -32,3 +37,4 @@ select = ["B", "E", "F", "I", "SIM", "UP"]
 [tool.mypy]
 python_version = "3.13"
 strict = true
+ 
