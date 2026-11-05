@@ -298,7 +298,9 @@ def valid_frame() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "TRANSACTION_ID": [1, 2],
-            "TX_DATETIME": pd.to_datetime(["2018-04-01 00:00:31", "2018-04-01 00:02:10"]),
+            "TX_DATETIME": pd.to_datetime(
+                ["2018-04-01 00:00:31", "2018-04-01 00:02:10"]
+            ),
             "CUSTOMER_ID": [596, 4961],
             "TX_AMOUNT": [57.16, 81.51],
             "TX_FRAUD": [0, 1],
@@ -408,7 +410,13 @@ import pandas as pd
 
 from fraud_detection.simulation import SIMULATED_TIMEZONE
 
-REQUIRED_COLUMNS = ("TRANSACTION_ID", "TX_DATETIME", "CUSTOMER_ID", "TX_AMOUNT", "TX_FRAUD")
+REQUIRED_COLUMNS = (
+    "TRANSACTION_ID",
+    "TX_DATETIME",
+    "CUSTOMER_ID",
+    "TX_AMOUNT",
+    "TX_FRAUD",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -606,9 +614,15 @@ from fraud_detection.features import (
 T0 = datetime(2018, 5, 10, 12, 0, tzinfo=UTC)
 
 
-def event(record_id: str, minutes_before: float, amount: float,
-          arrives_minutes_before: float | None = None) -> HistoryEvent:
-    arrival = minutes_before if arrives_minutes_before is None else arrives_minutes_before
+def event(
+    record_id: str,
+    minutes_before: float,
+    amount: float,
+    arrives_minutes_before: float | None = None,
+) -> HistoryEvent:
+    arrival = (
+        minutes_before if arrives_minutes_before is None else arrives_minutes_before
+    )
     return HistoryEvent(
         record_id=record_id,
         event_time=T0 - timedelta(minutes=minutes_before),
@@ -617,15 +631,29 @@ def event(record_id: str, minutes_before: float, amount: float,
     )
 
 
-def features(prior: list[HistoryEvent], tx_id: str = "current") -> dict[str, float | None]:
-    snap = compute_features(prior, transaction_id=tx_id, occurred_at=T0,
-                            amount=100.0, decision_cutoff=T0, spec=CUST_HIST_V1)
+def features(
+    prior: list[HistoryEvent], tx_id: str = "current"
+) -> dict[str, float | None]:
+    snap = compute_features(
+        prior,
+        transaction_id=tx_id,
+        occurred_at=T0,
+        amount=100.0,
+        decision_cutoff=T0,
+        spec=CUST_HIST_V1,
+    )
     return dict(snap.values)
 
 
 def test_cold_start_is_explicit_not_zero_mean() -> None:
-    snap = compute_features([], transaction_id="c", occurred_at=T0, amount=10.0,
-                            decision_cutoff=T0, spec=CUST_HIST_V1)
+    snap = compute_features(
+        [],
+        transaction_id="c",
+        occurred_at=T0,
+        amount=10.0,
+        decision_cutoff=T0,
+        spec=CUST_HIST_V1,
+    )
     assert snap.history_status is HistoryStatus.NO_HISTORY
     assert snap.values["count_1d"] == 0.0
     assert snap.values["mean_amount_1d"] is None
@@ -633,8 +661,11 @@ def test_cold_start_is_explicit_not_zero_mean() -> None:
 
 
 def test_counts_and_means_per_window() -> None:
-    prior = [event("a", 60, 10.0), event("b", 60 * 24 * 3, 20.0),
-             event("c", 60 * 24 * 20, 30.0)]
+    prior = [
+        event("a", 60, 10.0),
+        event("b", 60 * 24 * 3, 20.0),
+        event("c", 60 * 24 * 20, 30.0),
+    ]
     values = features(prior)
     assert values["count_1d"] == 1.0 and values["mean_amount_1d"] == 10.0
     assert values["count_7d"] == 2.0 and values["mean_amount_7d"] == 15.0
@@ -646,11 +677,16 @@ def test_exact_same_time_event_is_excluded() -> None:
 
 
 def test_event_arriving_at_cutoff_is_excluded() -> None:
-    assert features([event("late", 10, 50.0, arrives_minutes_before=0)])["count_1d"] == 0.0
+    assert (
+        features([event("late", 10, 50.0, arrives_minutes_before=0)])["count_1d"] == 0.0
+    )
 
 
 def test_event_arriving_after_cutoff_is_excluded() -> None:
-    assert features([event("later", 10, 50.0, arrives_minutes_before=-5)])["count_1d"] == 0.0
+    assert (
+        features([event("later", 10, 50.0, arrives_minutes_before=-5)])["count_1d"]
+        == 0.0
+    )
 
 
 def test_current_transaction_is_never_its_own_history() -> None:
@@ -678,8 +714,14 @@ def test_contract_round_trip_and_mismatch() -> None:
 
 def test_non_finite_amount_is_rejected() -> None:
     with pytest.raises(ValueError, match="finite"):
-        compute_features([], transaction_id="c", occurred_at=T0,
-                         amount=float("nan"), decision_cutoff=T0, spec=CUST_HIST_V1)
+        compute_features(
+            [],
+            transaction_id="c",
+            occurred_at=T0,
+            amount=float("nan"),
+            decision_cutoff=T0,
+            spec=CUST_HIST_V1,
+        )
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -714,7 +756,11 @@ class FeatureSpec:
         if not self.version.strip():
             raise ValueError("version must not be blank")
         windows = self.windows_days
-        if not windows or any(d <= 0 for d in windows) or len(set(windows)) != len(windows):
+        if (
+            not windows
+            or any(d <= 0 for d in windows)
+            or len(set(windows)) != len(windows)
+        ):
             raise ValueError("windows_days must be unique positive integers")
         object.__setattr__(self, "windows_days", tuple(sorted(windows)))
 
@@ -801,7 +847,9 @@ def compute_features(
         start = occurred - timedelta(days=days)
         amounts = [e.amount for e in eligible if e.event_time >= start]
         values[f"count_{days}d"] = float(len(amounts))
-        values[f"mean_amount_{days}d"] = fsum(amounts) / len(amounts) if amounts else None
+        values[f"mean_amount_{days}d"] = (
+            fsum(amounts) / len(amounts) if amounts else None
+        )
     status = HistoryStatus.HAS_HISTORY if eligible else HistoryStatus.NO_HISTORY
     return FeatureSnapshot(spec.version, cutoff, status, values)
 ```
@@ -851,13 +899,15 @@ def source(n_days: int = 10) -> pd.DataFrame:
     start = datetime(2018, 4, 1, tzinfo=UTC)
     rows = []
     for i in range(n_days * 2):
-        rows.append({
-            "TRANSACTION_ID": str(i),
-            "TX_DATETIME": start + timedelta(hours=12 * i),
-            "CUSTOMER_ID": str(i % 3),
-            "TX_AMOUNT": 10.0 + i,
-            "TX_FRAUD": i % 2,
-        })
+        rows.append(
+            {
+                "TRANSACTION_ID": str(i),
+                "TX_DATETIME": start + timedelta(hours=12 * i),
+                "CUSTOMER_ID": str(i % 3),
+                "TX_AMOUNT": 10.0 + i,
+                "TX_FRAUD": i % 2,
+            }
+        )
     rows.append({**rows[-1], "TRANSACTION_ID": "tie"})  # same customer, same second
     return pd.DataFrame(rows)
 
@@ -865,13 +915,25 @@ def source(n_days: int = 10) -> pd.DataFrame:
 def test_offline_equals_direct_function_call() -> None:
     src = source()
     frame = build_feature_frame(src, CUST_HIST_V1).set_index("TRANSACTION_ID")
-    events = [HistoryEvent(r.TRANSACTION_ID, r.TX_DATETIME.to_pydatetime(),
-                           r.TX_DATETIME.to_pydatetime(), r.TX_AMOUNT)
-              for r in src.itertuples() if r.CUSTOMER_ID == "1"]
+    events = [
+        HistoryEvent(
+            r.TRANSACTION_ID,
+            r.TX_DATETIME.to_pydatetime(),
+            r.TX_DATETIME.to_pydatetime(),
+            r.TX_AMOUNT,
+        )
+        for r in src.itertuples()
+        if r.CUSTOMER_ID == "1"
+    ]
     target = events[-1]
-    direct = compute_features(events, transaction_id=target.record_id,
-                              occurred_at=target.event_time, amount=target.amount,
-                              decision_cutoff=target.available_at, spec=CUST_HIST_V1)
+    direct = compute_features(
+        events,
+        transaction_id=target.record_id,
+        occurred_at=target.event_time,
+        amount=target.amount,
+        decision_cutoff=target.available_at,
+        spec=CUST_HIST_V1,
+    )
     row = frame.loc[target.record_id]
     for name in CUST_HIST_V1.feature_names:
         expected = direct.values[name]
@@ -900,8 +962,16 @@ def test_too_few_days_is_rejected() -> None:
         chronological_split(frame)
 
 
-@pytest.mark.parametrize("name", ["TX_FRAUD", "TX_FRAUD_SCENARIO", "TRANSACTION_ID",
-                                  "CUSTOMER_ID", "TERMINAL_ID_RISK_7DAY_WINDOW"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "TX_FRAUD",
+        "TX_FRAUD_SCENARIO",
+        "TRANSACTION_ID",
+        "CUSTOMER_ID",
+        "TERMINAL_ID_RISK_7DAY_WINDOW",
+    ],
+)
 def test_forbidden_predictor_is_rejected(name: str) -> None:
     frame = build_feature_frame(source(), CUST_HIST_V1)
     with pytest.raises(ValueError, match="unapproved feature"):
@@ -948,8 +1018,9 @@ def build_feature_frame(source: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame
             for r in group.itertuples(index=False)
         ]
         times = [e.event_time for e in events]
-        for i, (current, record) in enumerate(zip(events, group.itertuples(index=False),
-                                                  strict=True)):
+        for i, (current, record) in enumerate(
+            zip(events, group.itertuples(index=False), strict=True)
+        ):
             lo = bisect_left(times, current.event_time - spec.max_window)
             snap = compute_features(
                 events[lo:i],
@@ -959,20 +1030,22 @@ def build_feature_frame(source: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame
                 decision_cutoff=current.available_at,
                 spec=spec,
             )
-            rows.append({
-                "TRANSACTION_ID": current.record_id,
-                "CUSTOMER_ID": str(record.CUSTOMER_ID),
-                "TX_DATETIME": record.TX_DATETIME,
-                "TX_FRAUD": int(record.TX_FRAUD),
-                "history_status": snap.history_status.value,
-                **snap.values,
-            })
+            rows.append(
+                {
+                    "TRANSACTION_ID": current.record_id,
+                    "CUSTOMER_ID": str(record.CUSTOMER_ID),
+                    "TX_DATETIME": record.TX_DATETIME,
+                    "TX_FRAUD": int(record.TX_FRAUD),
+                    "history_status": snap.history_status.value,
+                    **snap.values,
+                }
+            )
     frame = pd.DataFrame(rows)
     for name in spec.feature_names:
         frame[name] = frame[name].astype(float)
-    return frame.sort_values(["TX_DATETIME", "TRANSACTION_ID"], kind="stable").reset_index(
-        drop=True
-    )
+    return frame.sort_values(
+        ["TX_DATETIME", "TRANSACTION_ID"], kind="stable"
+    ).reset_index(drop=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1010,7 +1083,9 @@ def chronological_split(
     return parts, SplitBoundaries(train_last, val_last)
 
 
-def predictors(frame: pd.DataFrame, names: Sequence[str], spec: FeatureSpec) -> pd.DataFrame:
+def predictors(
+    frame: pd.DataFrame, names: Sequence[str], spec: FeatureSpec
+) -> pd.DataFrame:
     unapproved = [n for n in names if n not in spec.feature_names]
     if unapproved:
         raise ValueError(f"unapproved feature(s): {', '.join(unapproved)}")
@@ -1021,7 +1096,11 @@ Add CLI subcommand in `cli.py`:
 
 ```python
 def _build_features(args: argparse.Namespace) -> int:
-    from fraud_detection.data import load_reviewed_files, read_pins, validate_source_frame
+    from fraud_detection.data import (
+        load_reviewed_files,
+        read_pins,
+        validate_source_frame,
+    )
     from fraud_detection.features import CUST_HIST_V1
     from fraud_detection.offline import build_feature_frame
 
@@ -1096,7 +1175,9 @@ from fraud_detection.evaluation import ranking_metrics
 
 
 def test_metrics_have_explicit_denominators() -> None:
-    result = ranking_metrics(np.array([1, 0, 1, 0]), np.array([0.9, 0.8, 0.2, 0.1]), k=2)
+    result = ranking_metrics(
+        np.array([1, 0, 1, 0]), np.array([0.9, 0.8, 0.2, 0.1]), k=2
+    )
     assert result["precision_at_k"] == 0.5
     assert result["capture_at_k"] == 0.5
     assert result["prevalence"] == 0.5
@@ -1181,30 +1262,40 @@ def tiny_model() -> Pipeline:
 
 
 def test_round_trip_scores(tmp_path: Path) -> None:
-    digest = write_artifact(tmp_path, model=tiny_model(), spec=CUST_HIST_V1,
-                            model_version="m1", metadata={"run_id": "r"})
-    artifact = load_artifact(tmp_path, expected_digest=digest, expected_spec=CUST_HIST_V1)
+    digest = write_artifact(
+        tmp_path,
+        model=tiny_model(),
+        spec=CUST_HIST_V1,
+        model_version="m1",
+        metadata={"run_id": "r"},
+    )
+    artifact = load_artifact(
+        tmp_path, expected_digest=digest, expected_spec=CUST_HIST_V1
+    )
     assert artifact.model_version == "m1"
 
 
 def test_digest_mismatch_blocks_loading(tmp_path: Path) -> None:
-    write_artifact(tmp_path, model=tiny_model(), spec=CUST_HIST_V1,
-                   model_version="m1", metadata={})
+    write_artifact(
+        tmp_path, model=tiny_model(), spec=CUST_HIST_V1, model_version="m1", metadata={}
+    )
     with pytest.raises(ArtifactError, match="digest"):
         load_artifact(tmp_path, expected_digest="0" * 64, expected_spec=CUST_HIST_V1)
 
 
 def test_feature_contract_mismatch_blocks_loading(tmp_path: Path) -> None:
-    digest = write_artifact(tmp_path, model=tiny_model(), spec=CUST_HIST_V1,
-                            model_version="m1", metadata={})
+    digest = write_artifact(
+        tmp_path, model=tiny_model(), spec=CUST_HIST_V1, model_version="m1", metadata={}
+    )
     other = FeatureSpec("cust_hist_v2", (1, 7))
     with pytest.raises(ArtifactError, match="feature contract"):
         load_artifact(tmp_path, expected_digest=digest, expected_spec=other)
 
 
 def test_missing_model_file_blocks_loading(tmp_path: Path) -> None:
-    digest = write_artifact(tmp_path, model=tiny_model(), spec=CUST_HIST_V1,
-                            model_version="m1", metadata={})
+    digest = write_artifact(
+        tmp_path, model=tiny_model(), spec=CUST_HIST_V1, model_version="m1", metadata={}
+    )
     (tmp_path / "model.joblib").unlink()
     with pytest.raises(ArtifactError, match="missing"):
         load_artifact(tmp_path, expected_digest=digest, expected_spec=CUST_HIST_V1)
@@ -1231,12 +1322,22 @@ def feature_frame(days: int = 20, per_day: int = 40) -> pd.DataFrame:
     for i in range(days * per_day):
         fraud = int(rng.random() < 0.1)
         amount = rng.normal(200 if fraud else 50, 10)
-        rows.append({"TRANSACTION_ID": str(i), "CUSTOMER_ID": str(i % 50),
-                     "TX_DATETIME": start + timedelta(minutes=36 * i),
-                     "TX_FRAUD": fraud, "history_status": "has_history",
-                     "amount": amount, "count_1d": 1.0, "mean_amount_1d": 50.0,
-                     "count_7d": 3.0, "mean_amount_7d": 50.0,
-                     "count_30d": 9.0, "mean_amount_30d": np.nan})
+        rows.append(
+            {
+                "TRANSACTION_ID": str(i),
+                "CUSTOMER_ID": str(i % 50),
+                "TX_DATETIME": start + timedelta(minutes=36 * i),
+                "TX_FRAUD": fraud,
+                "history_status": "has_history",
+                "amount": amount,
+                "count_1d": 1.0,
+                "mean_amount_1d": 50.0,
+                "count_7d": 3.0,
+                "mean_amount_7d": 50.0,
+                "count_30d": 9.0,
+                "mean_amount_30d": np.nan,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -1260,10 +1361,12 @@ def test_one_class_training_is_rejected() -> None:
 def test_experiment_is_reproducible_and_tracked(tmp_path: Path) -> None:
     uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     frame = feature_frame()
-    first = run_experiment(frame, CUST_HIST_V1, k=20, tracking_uri=uri,
-                           artifact_root=tmp_path / "a")
-    second = run_experiment(frame, CUST_HIST_V1, k=20, tracking_uri=uri,
-                            artifact_root=tmp_path / "b")
+    first = run_experiment(
+        frame, CUST_HIST_V1, k=20, tracking_uri=uri, artifact_root=tmp_path / "a"
+    )
+    second = run_experiment(
+        frame, CUST_HIST_V1, k=20, tracking_uri=uri, artifact_root=tmp_path / "b"
+    )
     assert first.chosen == second.chosen
     assert first.validation == second.validation
     assert (first.artifact_dir / "feature_contract.json").exists()
@@ -1300,14 +1403,18 @@ from fraud_detection.features import FeatureSpec
 from fraud_detection.offline import chronological_split, predictors
 
 CANDIDATES: dict[str, Callable[[], Pipeline]] = {
-    "logreg": lambda: Pipeline([
-        ("imputer", SimpleImputer(strategy="median", add_indicator=True)),
-        ("scaler", StandardScaler()),
-        ("model", LogisticRegression(max_iter=1000)),
-    ]),
-    "hgb": lambda: Pipeline([
-        ("model", HistGradientBoostingClassifier(random_state=0)),
-    ]),
+    "logreg": lambda: Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="median", add_indicator=True)),
+            ("scaler", StandardScaler()),
+            ("model", LogisticRegression(max_iter=1000)),
+        ]
+    ),
+    "hgb": lambda: Pipeline(
+        [
+            ("model", HistGradientBoostingClassifier(random_state=0)),
+        ]
+    ),
 }
 
 
@@ -1337,8 +1444,9 @@ class ExperimentResult:
 
 def _git_revision() -> str:
     try:
-        out = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                             text=True, check=True)
+        out = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        )
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
     return out.stdout.strip()
@@ -1357,24 +1465,37 @@ def run_experiment(
     parts, bounds = chronological_split(frame)
     names = spec.feature_names
     x_train, y_train = predictors(parts.train, names, spec), parts.train["TX_FRAUD"]
-    x_val, y_val = predictors(parts.validation, names, spec), parts.validation["TX_FRAUD"]
+    x_val, y_val = (
+        predictors(parts.validation, names, spec),
+        parts.validation["TX_FRAUD"],
+    )
     x_test, y_test = predictors(parts.test, names, spec), parts.test["TX_FRAUD"]
 
-    validation = {"baseline_amount": ranking_metrics(
-        y_val.to_numpy(), x_val["amount"].to_numpy(), k)}
+    validation = {
+        "baseline_amount": ranking_metrics(
+            y_val.to_numpy(), x_val["amount"].to_numpy(), k
+        )
+    }
     models = {}
     for name in CANDIDATES:
         models[name] = fit_candidate(name, x_train, y_train)
         validation[name] = ranking_metrics(
-            y_val.to_numpy(), ranking_scores(models[name], x_val), k)
+            y_val.to_numpy(), ranking_scores(models[name], x_val), k
+        )
     chosen = max(CANDIDATES, key=lambda n: validation[n]["average_precision"])
-    beats = (validation[chosen]["average_precision"]
-             > validation["baseline_amount"]["average_precision"])
+    beats = (
+        validation[chosen]["average_precision"]
+        > validation["baseline_amount"]["average_precision"]
+    )
 
     # Final period: evaluated once, after selection.
     test = {
-        "baseline_amount": ranking_metrics(y_test.to_numpy(), x_test["amount"].to_numpy(), k),
-        chosen: ranking_metrics(y_test.to_numpy(), ranking_scores(models[chosen], x_test), k),
+        "baseline_amount": ranking_metrics(
+            y_test.to_numpy(), x_test["amount"].to_numpy(), k
+        ),
+        chosen: ranking_metrics(
+            y_test.to_numpy(), ranking_scores(models[chosen], x_test), k
+        ),
     }
 
     mlflow.set_tracking_uri(tracking_uri)
@@ -1384,26 +1505,45 @@ def run_experiment(
         model_version = f"{spec.version}-{chosen}-{run_id[:8]}"
         artifact_dir = artifact_root / model_version
         digest = write_artifact(
-            artifact_dir, model=models[chosen], spec=spec, model_version=model_version,
-            metadata={"run_id": run_id, "code_revision": _git_revision(),
-                      "train_last_day": str(bounds.train_last_day),
-                      "validation_last_day": str(bounds.validation_last_day)},
+            artifact_dir,
+            model=models[chosen],
+            spec=spec,
+            model_version=model_version,
+            metadata={
+                "run_id": run_id,
+                "code_revision": _git_revision(),
+                "train_last_day": str(bounds.train_last_day),
+                "validation_last_day": str(bounds.validation_last_day),
+            },
         )
-        mlflow.log_params({"feature_version": spec.version, "k": k, "chosen": chosen,
-                           "train_last_day": str(bounds.train_last_day),
-                           "validation_last_day": str(bounds.validation_last_day),
-                           "rows_train": len(parts.train),
-                           "rows_validation": len(parts.validation),
-                           "rows_test": len(parts.test)})
+        mlflow.log_params(
+            {
+                "feature_version": spec.version,
+                "k": k,
+                "chosen": chosen,
+                "train_last_day": str(bounds.train_last_day),
+                "validation_last_day": str(bounds.validation_last_day),
+                "rows_train": len(parts.train),
+                "rows_validation": len(parts.validation),
+                "rows_test": len(parts.test),
+            }
+        )
         for split, table in (("validation", validation), ("test", test)):
             for model_name, metrics in table.items():
                 for metric, value in metrics.items():
                     mlflow.log_metric(f"{split}.{model_name}.{metric}", value)
         mlflow.log_artifacts(str(artifact_dir), artifact_path="artifact")
-        mlflow.set_tags({"artifact_digest": digest, "reviewed": "false",
-                         "score_kind": "ranking", "data": "public-simulated"})
-    return ExperimentResult(run_id, chosen, model_version, artifact_dir, digest,
-                            beats, validation, test)
+        mlflow.set_tags(
+            {
+                "artifact_digest": digest,
+                "reviewed": "false",
+                "score_kind": "ranking",
+                "data": "public-simulated",
+            }
+        )
+    return ExperimentResult(
+        run_id, chosen, model_version, artifact_dir, digest, beats, validation, test
+    )
 ```
 
 `src/fraud_detection/artifact.py`:
@@ -1443,15 +1583,29 @@ def artifact_digest(directory: Path) -> str:
     return digest.hexdigest()
 
 
-def write_artifact(directory: Path, *, model: Pipeline, spec: FeatureSpec,
-                   model_version: str, metadata: Mapping[str, object]) -> str:
+def write_artifact(
+    directory: Path,
+    *,
+    model: Pipeline,
+    spec: FeatureSpec,
+    model_version: str,
+    metadata: Mapping[str, object],
+) -> str:
     directory.mkdir(parents=True, exist_ok=False)
     joblib.dump(model, directory / MODEL_FILE)
-    (directory / CONTRACT_FILE).write_text(json.dumps(spec.to_contract(), sort_keys=True))
+    (directory / CONTRACT_FILE).write_text(
+        json.dumps(spec.to_contract(), sort_keys=True)
+    )
     digest = artifact_digest(directory)
-    manifest = {"model_version": model_version, "digest": digest,
-                "score_kind": "ranking", **metadata}
-    (directory / MANIFEST_FILE).write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    manifest = {
+        "model_version": model_version,
+        "digest": digest,
+        "score_kind": "ranking",
+        **metadata,
+    }
+    (directory / MANIFEST_FILE).write_text(
+        json.dumps(manifest, indent=2, sort_keys=True)
+    )
     return digest
 
 
@@ -1468,12 +1622,15 @@ class ModelArtifact:
         return float(self.model.decision_function(row)[0])
 
 
-def load_artifact(directory: Path, *, expected_digest: str,
-                  expected_spec: FeatureSpec) -> ModelArtifact:
+def load_artifact(
+    directory: Path, *, expected_digest: str, expected_spec: FeatureSpec
+) -> ModelArtifact:
     actual = artifact_digest(directory)
     if actual != expected_digest:
         raise ArtifactError("artifact digest does not match the pinned digest")
-    spec = FeatureSpec.from_contract(json.loads((directory / CONTRACT_FILE).read_text()))
+    spec = FeatureSpec.from_contract(
+        json.loads((directory / CONTRACT_FILE).read_text())
+    )
     if spec != expected_spec:
         raise ArtifactError("feature contract does not match the service feature spec")
     manifest = json.loads((directory / MANIFEST_FILE).read_text())
@@ -1491,18 +1648,33 @@ def _train(args: argparse.Namespace) -> int:
     from fraud_detection.training import run_experiment
 
     frame = pd.read_parquet(args.features)
-    result = run_experiment(frame, CUST_HIST_V1, k=args.k,
-                            tracking_uri=args.tracking_uri,
-                            artifact_root=Path(args.artifact_root))
-    print(json.dumps({"run_id": result.run_id, "chosen": result.chosen,
-                      "model_version": result.model_version,
-                      "artifact_dir": str(result.artifact_dir),
-                      "digest": result.digest,
-                      "beats_baseline_on_validation": result.beats_baseline,
-                      "validation": result.validation, "test": result.test}, indent=2))
+    result = run_experiment(
+        frame,
+        CUST_HIST_V1,
+        k=args.k,
+        tracking_uri=args.tracking_uri,
+        artifact_root=Path(args.artifact_root),
+    )
+    print(
+        json.dumps(
+            {
+                "run_id": result.run_id,
+                "chosen": result.chosen,
+                "model_version": result.model_version,
+                "artifact_dir": str(result.artifact_dir),
+                "digest": result.digest,
+                "beats_baseline_on_validation": result.beats_baseline,
+                "validation": result.validation,
+                "test": result.test,
+            },
+            indent=2,
+        )
+    )
     if not result.beats_baseline:
-        print("WARNING: chosen model does not beat the amount baseline on validation;"
-              " owner review required before pinning.")
+        print(
+            "WARNING: chosen model does not beat the amount baseline on validation;"
+            " owner review required before pinning."
+        )
     return 0
 
 
@@ -1658,11 +1830,19 @@ from decimal import Decimal
 import pytest
 
 from fraud_detection.contracts import (
-    HistoryStatus, ScoreResult, ScoreStatus, UnavailableReason,
+    HistoryStatus,
+    ScoreResult,
+    ScoreStatus,
+    UnavailableReason,
 )
 from fraud_detection.db import (
-    AcceptedTransaction, Conn, fetch_history, fetch_original, insert_score,
-    insert_snapshot, insert_transaction,
+    AcceptedTransaction,
+    Conn,
+    fetch_history,
+    fetch_original,
+    insert_score,
+    insert_snapshot,
+    insert_transaction,
 )
 from fraud_detection.features import CUST_HIST_V1, compute_features
 
@@ -1672,8 +1852,19 @@ T0 = datetime(2026, 9, 1, 12, tzinfo=UTC)
 
 def tx(tx_id: str, minutes: int, supplier: str = "s1") -> AcceptedTransaction:
     at = T0 + timedelta(minutes=minutes)
-    return AcceptedTransaction(supplier, tx_id, "c1", at, Decimal("12.50"), "XTS",
-                               at, at, f"hash-{tx_id}", at, "test")
+    return AcceptedTransaction(
+        supplier,
+        tx_id,
+        "c1",
+        at,
+        Decimal("12.50"),
+        "XTS",
+        at,
+        at,
+        f"hash-{tx_id}",
+        at,
+        "test",
+    )
 
 
 def test_duplicate_key_is_not_inserted_twice(db_conn: Conn) -> None:
@@ -1685,19 +1876,31 @@ def test_history_respects_cutoff_and_supplier(db_conn: Conn) -> None:
     insert_transaction(db_conn, tx("t1", 0))
     insert_transaction(db_conn, tx("t2", 10))
     insert_transaction(db_conn, tx("x1", 0, supplier="s2"))
-    events = fetch_history(db_conn, "s1", "c1", since=T0 - timedelta(days=30),
-                           cutoff=T0 + timedelta(minutes=10))
+    events = fetch_history(
+        db_conn,
+        "s1",
+        "c1",
+        since=T0 - timedelta(days=30),
+        cutoff=T0 + timedelta(minutes=10),
+    )
     assert [e.record_id for e in events] == ["t1"]
     assert events[0].amount == 12.5
 
 
 def test_original_result_round_trip(db_conn: Conn) -> None:
     insert_transaction(db_conn, tx("t1", 0))
-    snap = compute_features([], transaction_id="t1", occurred_at=T0, amount=12.5,
-                            decision_cutoff=T0, spec=CUST_HIST_V1)
+    snap = compute_features(
+        [],
+        transaction_id="t1",
+        occurred_at=T0,
+        amount=12.5,
+        decision_cutoff=T0,
+        spec=CUST_HIST_V1,
+    )
     insert_snapshot(db_conn, "s1", "t1", snap, None)
-    result = ScoreResult("t1", T0, ScoreStatus.AVAILABLE, 1.25, "ranking",
-                         "m1", "cust_hist_v1")
+    result = ScoreResult(
+        "t1", T0, ScoreStatus.AVAILABLE, 1.25, "ranking", "m1", "cust_hist_v1"
+    )
     insert_score(db_conn, "s1", result)
     stored = fetch_original(db_conn, "s1", "t1")
     assert stored is not None
@@ -1708,8 +1911,16 @@ def test_original_result_round_trip(db_conn: Conn) -> None:
 def test_unavailable_without_snapshot_round_trip(db_conn: Conn) -> None:
     insert_transaction(db_conn, tx("t1", 0))
     insert_snapshot(db_conn, "s1", "t1", None, "late")
-    result = ScoreResult("t1", T0, ScoreStatus.UNAVAILABLE, None, None, None, None,
-                         UnavailableReason.LATE)
+    result = ScoreResult(
+        "t1",
+        T0,
+        ScoreStatus.UNAVAILABLE,
+        None,
+        None,
+        None,
+        None,
+        UnavailableReason.LATE,
+    )
     insert_score(db_conn, "s1", result)
     stored = fetch_original(db_conn, "s1", "t1")
     assert stored is not None and stored.history_status is None
@@ -1736,7 +1947,11 @@ from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Jsonb
 
 from fraud_detection.contracts import (
-    HistoryStatus, ScoreKind, ScoreResult, ScoreStatus, UnavailableReason,
+    HistoryStatus,
+    ScoreKind,
+    ScoreResult,
+    ScoreStatus,
+    UnavailableReason,
 )
 from fraud_detection.features import FeatureSnapshot, HistoryEvent
 
@@ -1861,7 +2076,9 @@ def _result_from_row(row: dict[str, Any]) -> ScoreResult:
     )
 
 
-def fetch_original(conn: Conn, supplier_id: str, transaction_id: str) -> StoredOriginal | None:
+def fetch_original(
+    conn: Conn, supplier_id: str, transaction_id: str
+) -> StoredOriginal | None:
     row = conn.execute(
         """
         SELECT t.request_hash, t.accepted_at, s.*, f.history_status
@@ -1875,12 +2092,14 @@ def fetch_original(conn: Conn, supplier_id: str, transaction_id: str) -> StoredO
     if row is None:
         return None
     status = HistoryStatus(row["history_status"]) if row["history_status"] else None
-    return StoredOriginal(row["request_hash"], row["accepted_at"], _result_from_row(row),
-                          status)
+    return StoredOriginal(
+        row["request_hash"], row["accepted_at"], _result_from_row(row), status
+    )
 
 
-def fetch_history(conn: Conn, supplier_id: str, customer_id: str, *,
-                  since: datetime, cutoff: datetime) -> list[HistoryEvent]:
+def fetch_history(
+    conn: Conn, supplier_id: str, customer_id: str, *, since: datetime, cutoff: datetime
+) -> list[HistoryEvent]:
     rows = conn.execute(
         """
         SELECT transaction_id, occurred_at, available_at, amount FROM transactions
@@ -1890,8 +2109,12 @@ def fetch_history(conn: Conn, supplier_id: str, customer_id: str, *,
         """,
         (supplier_id, customer_id, since, cutoff),
     ).fetchall()
-    return [HistoryEvent(r["transaction_id"], r["occurred_at"], r["available_at"],
-                         float(r["amount"])) for r in rows]
+    return [
+        HistoryEvent(
+            r["transaction_id"], r["occurred_at"], r["available_at"], float(r["amount"])
+        )
+        for r in rows
+    ]
 
 
 def insert_transaction(conn: Conn, tx: AcceptedTransaction) -> bool:
@@ -1902,25 +2125,43 @@ def insert_transaction(conn: Conn, tx: AcceptedTransaction) -> bool:
         ON CONFLICT (supplier_id, transaction_id) DO NOTHING
         RETURNING transaction_id
         """,
-        (tx.supplier_id, tx.transaction_id, tx.customer_id, tx.occurred_at, tx.amount,
-         tx.currency, tx.received_at, tx.available_at, tx.request_hash, tx.accepted_at,
-         tx.env_tag),
+        (
+            tx.supplier_id,
+            tx.transaction_id,
+            tx.customer_id,
+            tx.occurred_at,
+            tx.amount,
+            tx.currency,
+            tx.received_at,
+            tx.available_at,
+            tx.request_hash,
+            tx.accepted_at,
+            tx.env_tag,
+        ),
     ).fetchone()
     return row is not None
 
 
-def insert_snapshot(conn: Conn, supplier_id: str, transaction_id: str,
-                    snapshot: FeatureSnapshot | None, failure_reason: str | None) -> None:
+def insert_snapshot(
+    conn: Conn,
+    supplier_id: str,
+    transaction_id: str,
+    snapshot: FeatureSnapshot | None,
+    failure_reason: str | None,
+) -> None:
     if (snapshot is None) == (failure_reason is None):
         raise ValueError("provide exactly one of snapshot or failure_reason")
     conn.execute(
         "INSERT INTO feature_snapshots VALUES (%s, %s, %s, %s, %s, %s, %s)",
-        (supplier_id, transaction_id,
-         snapshot.feature_version if snapshot else None,
-         snapshot.decision_cutoff if snapshot else None,
-         snapshot.history_status.value if snapshot else None,
-         Jsonb(dict(snapshot.values)) if snapshot else None,
-         failure_reason),
+        (
+            supplier_id,
+            transaction_id,
+            snapshot.feature_version if snapshot else None,
+            snapshot.decision_cutoff if snapshot else None,
+            snapshot.history_status.value if snapshot else None,
+            Jsonb(dict(snapshot.values)) if snapshot else None,
+            failure_reason,
+        ),
     )
 
 
@@ -1931,15 +2172,24 @@ def insert_score(conn: Conn, supplier_id: str, result: ScoreResult) -> None:
             score_semantics, reason, scored_at, model_version, feature_version)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
-        (supplier_id, result.transaction_id, result.kind.value, result.status.value,
-         result.score, result.score_semantics,
-         result.reason.value if result.reason else None, result.scored_at,
-         result.model_version, result.feature_version),
+        (
+            supplier_id,
+            result.transaction_id,
+            result.kind.value,
+            result.status.value,
+            result.score,
+            result.score_semantics,
+            result.reason.value if result.reason else None,
+            result.scored_at,
+            result.model_version,
+            result.feature_version,
+        ),
     )
 
 
-def insert_audit(conn: Conn, *, request_id: str, category: str, route: str,
-                 supplier_id: str | None) -> None:
+def insert_audit(
+    conn: Conn, *, request_id: str, category: str, route: str, supplier_id: str | None
+) -> None:
     conn.execute(
         "INSERT INTO audit_events (request_id, category, route, supplier_id)"
         " VALUES (%s, %s, %s, %s)",
@@ -2029,10 +2279,15 @@ def make_service(
     )
 
 
-def tx(tx_id: str, customer: str = "c1", amount: str = "10.00",
-       occurred: datetime | None = None) -> TransactionInput:
-    return TransactionInput(tx_id, customer, occurred or datetime.now(UTC),
-                            Decimal(amount), "XTS")
+def tx(
+    tx_id: str,
+    customer: str = "c1",
+    amount: str = "10.00",
+    occurred: datetime | None = None,
+) -> TransactionInput:
+    return TransactionInput(
+        tx_id, customer, occurred or datetime.now(UTC), Decimal(amount), "XTS"
+    )
 ```
 
 `tests/test_service.py`:
@@ -2048,14 +2303,19 @@ import pytest
 from fraud_detection.contracts import HistoryStatus, ScoreStatus, UnavailableReason
 from fraud_detection.db import Conn
 from fraud_detection.service import (
-    IngestOutcome, IngestStatus, StoreUnavailable, TransactionConflict,
+    IngestOutcome,
+    IngestStatus,
+    StoreUnavailable,
+    TransactionConflict,
 )
 from tests.helpers import BrokenScorer, make_service, tx
 
 pytestmark = pytest.mark.integration
 
 
-def test_new_transaction_is_scored_with_cold_start(db_conn: Conn, database_url: str) -> None:
+def test_new_transaction_is_scored_with_cold_start(
+    db_conn: Conn, database_url: str
+) -> None:
     outcome = make_service(database_url).ingest("s1", tx("t1"))
     assert outcome.status is IngestStatus.CREATED
     assert outcome.result.status is ScoreStatus.AVAILABLE
@@ -2081,24 +2341,33 @@ def test_same_id_different_content_conflicts(db_conn: Conn, database_url: str) -
         service.ingest("s1", tx("t1", amount="11.00", occurred=occurred))
 
 
-def test_same_transaction_id_is_isolated_per_supplier(db_conn: Conn,
-                                                      database_url: str) -> None:
+def test_same_transaction_id_is_isolated_per_supplier(
+    db_conn: Conn, database_url: str
+) -> None:
     service = make_service(database_url)
-    service.ingest("s1", tx("shared", occurred=datetime.now(UTC) - timedelta(minutes=2)))
-    service.ingest("s1", tx("s1-other", occurred=datetime.now(UTC) - timedelta(minutes=1)))
+    service.ingest(
+        "s1", tx("shared", occurred=datetime.now(UTC) - timedelta(minutes=2))
+    )
+    service.ingest(
+        "s1", tx("s1-other", occurred=datetime.now(UTC) - timedelta(minutes=1))
+    )
     outcome = service.ingest("s2", tx("shared"))
     assert outcome.status is IngestStatus.CREATED
     assert outcome.history_status is HistoryStatus.NO_HISTORY
 
 
-def test_late_event_is_accepted_but_unavailable(db_conn: Conn, database_url: str) -> None:
+def test_late_event_is_accepted_but_unavailable(
+    db_conn: Conn, database_url: str
+) -> None:
     old = datetime.now(UTC) - timedelta(days=3)
     outcome = make_service(database_url).ingest("s1", tx("t1", occurred=old))
     assert outcome.result.reason is UnavailableReason.LATE
     assert outcome.history_status is None
 
 
-def test_model_failure_is_explicit_not_low_score(db_conn: Conn, database_url: str) -> None:
+def test_model_failure_is_explicit_not_low_score(
+    db_conn: Conn, database_url: str
+) -> None:
     outcome = make_service(database_url, scorer=BrokenScorer).ingest("s1", tx("t1"))
     assert outcome.result.status is ScoreStatus.UNAVAILABLE
     assert outcome.result.reason is UnavailableReason.MODEL_UNAVAILABLE
@@ -2123,7 +2392,8 @@ def test_concurrent_same_customer_requests_are_serialized(
     def worker(i: int) -> None:
         try:
             outcomes[f"t{i}"] = service.ingest(
-                "s1", tx(f"t{i}", occurred=base + timedelta(seconds=i)))
+                "s1", tx(f"t{i}", occurred=base + timedelta(seconds=i))
+            )
         except BaseException as exc:  # surfaced by the assertion below
             errors.append(exc)
 
@@ -2141,7 +2411,8 @@ def test_concurrent_same_customer_requests_are_serialized(
     assert len(set(cutoffs)) == 20, "decisions must be strictly ordered"
     for row in rows:
         expected = sum(
-            1 for other in rows
+            1
+            for other in rows
             if other["available_at"] < row["available_at"]
             and other["occurred_at"] < row["occurred_at"]
         )
@@ -2202,7 +2473,11 @@ import psycopg
 
 from fraud_detection import db
 from fraud_detection.contracts import (
-    RANKING_SEMANTICS, HistoryStatus, ScoreResult, ScoreStatus, UnavailableReason,
+    RANKING_SEMANTICS,
+    HistoryStatus,
+    ScoreResult,
+    ScoreStatus,
+    UnavailableReason,
 )
 from fraud_detection.features import FeatureSnapshot, FeatureSpec, compute_features
 from fraud_detection.temporal import ensure_utc
@@ -2220,13 +2495,16 @@ class TransactionInput:
 
 
 def request_hash(tx: TransactionInput) -> str:
-    canonical = json.dumps({
-        "transaction_id": tx.transaction_id,
-        "customer_id": tx.customer_id,
-        "occurred_at": ensure_utc(tx.occurred_at).isoformat(),
-        "amount": str(tx.amount.normalize()),
-        "currency": tx.currency,
-    }, sort_keys=True)
+    canonical = json.dumps(
+        {
+            "transaction_id": tx.transaction_id,
+            "customer_id": tx.customer_id,
+            "occurred_at": ensure_utc(tx.occurred_at).isoformat(),
+            "amount": str(tx.amount.normalize()),
+            "currency": tx.currency,
+        },
+        sort_keys=True,
+    )
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
@@ -2270,10 +2548,17 @@ def _close(conn: db.Conn) -> None:
 
 
 class IngestService:
-    def __init__(self, *, connect: Callable[[], db.Conn],
-                 scorer: Callable[[], Scorer | None], spec: FeatureSpec,
-                 late_after: timedelta, clock: Callable[[], datetime],
-                 env_tag: str, release: Callable[[db.Conn], None] = _close) -> None:
+    def __init__(
+        self,
+        *,
+        connect: Callable[[], db.Conn],
+        scorer: Callable[[], Scorer | None],
+        spec: FeatureSpec,
+        late_after: timedelta,
+        clock: Callable[[], datetime],
+        env_tag: str,
+        release: Callable[[db.Conn], None] = _close,
+    ) -> None:
         self._connect = connect
         self._release = release
         self._scorer = scorer
@@ -2282,8 +2567,13 @@ class IngestService:
         self._clock = clock
         self._env_tag = env_tag
 
-    def ingest(self, supplier_id: str, tx: TransactionInput, *,
-               simulated_at: datetime | None = None) -> IngestOutcome:
+    def ingest(
+        self,
+        supplier_id: str,
+        tx: TransactionInput,
+        *,
+        simulated_at: datetime | None = None,
+    ) -> IngestOutcome:
         digest = request_hash(tx)
         received = ensure_utc(simulated_at or self._clock(), field_name="received_at")
         try:
@@ -2302,9 +2592,15 @@ class IngestService:
                 log.warning("rollback on release failed")
             self._release(conn)
 
-    def _ingest(self, conn: db.Conn, supplier_id: str, tx: TransactionInput,
-                digest: str, received: datetime,
-                simulated_at: datetime | None) -> IngestOutcome:
+    def _ingest(
+        self,
+        conn: db.Conn,
+        supplier_id: str,
+        tx: TransactionInput,
+        digest: str,
+        received: datetime,
+        simulated_at: datetime | None,
+    ) -> IngestOutcome:
         db.lock_customer(conn, supplier_id, tx.customer_id)
         existing = db.fetch_original(conn, supplier_id, tx.transaction_id)
         if existing is not None:
@@ -2312,11 +2608,25 @@ class IngestService:
             return self._resolve(existing, digest)
         cutoff = ensure_utc(simulated_at or self._clock(), field_name="decision_cutoff")
         scored = self._score(conn, supplier_id, tx, received, cutoff)
-        accepted_at = ensure_utc(simulated_at or self._clock(), field_name="accepted_at")
-        inserted = db.insert_transaction(conn, db.AcceptedTransaction(
-            supplier_id, tx.transaction_id, tx.customer_id, ensure_utc(tx.occurred_at),
-            tx.amount, tx.currency, received, cutoff, digest, accepted_at, self._env_tag,
-        ))
+        accepted_at = ensure_utc(
+            simulated_at or self._clock(), field_name="accepted_at"
+        )
+        inserted = db.insert_transaction(
+            conn,
+            db.AcceptedTransaction(
+                supplier_id,
+                tx.transaction_id,
+                tx.customer_id,
+                ensure_utc(tx.occurred_at),
+                tx.amount,
+                tx.currency,
+                received,
+                cutoff,
+                digest,
+                accepted_at,
+                self._env_tag,
+            ),
+        )
         if not inserted:
             # Same ID raced under a different customer lock; the winner is committed.
             conn.rollback()
@@ -2325,8 +2635,9 @@ class IngestService:
             if winner is None:
                 raise StoreUnavailable("concurrent insert outcome unknown")
             return self._resolve(winner, digest)
-        db.insert_snapshot(conn, supplier_id, tx.transaction_id, scored.snapshot,
-                           scored.failure_reason)
+        db.insert_snapshot(
+            conn, supplier_id, tx.transaction_id, scored.snapshot, scored.failure_reason
+        )
         db.insert_score(conn, supplier_id, scored.result)
         conn.commit()
         history = scored.snapshot.history_status if scored.snapshot else None
@@ -2336,35 +2647,75 @@ class IngestService:
     def _resolve(existing: db.StoredOriginal, digest: str) -> IngestOutcome:
         if existing.request_hash != digest:
             raise TransactionConflict("transaction_id reused with different content")
-        return IngestOutcome(IngestStatus.RETRY, existing.accepted_at, existing.result,
-                             existing.history_status)
+        return IngestOutcome(
+            IngestStatus.RETRY,
+            existing.accepted_at,
+            existing.result,
+            existing.history_status,
+        )
 
-    def _unavailable(self, tx: TransactionInput, at: datetime, reason: UnavailableReason,
-                     model_version: str | None, feature_version: str | None) -> ScoreResult:
-        return ScoreResult(tx.transaction_id, at, ScoreStatus.UNAVAILABLE, None, None,
-                           model_version, feature_version, reason)
+    def _unavailable(
+        self,
+        tx: TransactionInput,
+        at: datetime,
+        reason: UnavailableReason,
+        model_version: str | None,
+        feature_version: str | None,
+    ) -> ScoreResult:
+        return ScoreResult(
+            tx.transaction_id,
+            at,
+            ScoreStatus.UNAVAILABLE,
+            None,
+            None,
+            model_version,
+            feature_version,
+            reason,
+        )
 
-    def _score(self, conn: db.Conn, supplier_id: str, tx: TransactionInput,
-               received: datetime, cutoff: datetime) -> _Scored:
+    def _score(
+        self,
+        conn: db.Conn,
+        supplier_id: str,
+        tx: TransactionInput,
+        received: datetime,
+        cutoff: datetime,
+    ) -> _Scored:
         occurred = ensure_utc(tx.occurred_at, field_name="occurred_at")
         if received - occurred > self._late_after:
             result = self._unavailable(tx, cutoff, UnavailableReason.LATE, None, None)
             return _Scored(result, None, UnavailableReason.LATE.value)
-        prior = db.fetch_history(conn, supplier_id, tx.customer_id,
-                                 since=occurred - self._spec.max_window, cutoff=cutoff)
+        prior = db.fetch_history(
+            conn,
+            supplier_id,
+            tx.customer_id,
+            since=occurred - self._spec.max_window,
+            cutoff=cutoff,
+        )
         try:
-            snapshot = compute_features(prior, transaction_id=tx.transaction_id,
-                                        occurred_at=occurred, amount=float(tx.amount),
-                                        decision_cutoff=cutoff, spec=self._spec)
+            snapshot = compute_features(
+                prior,
+                transaction_id=tx.transaction_id,
+                occurred_at=occurred,
+                amount=float(tx.amount),
+                decision_cutoff=cutoff,
+                spec=self._spec,
+            )
         except (ValueError, ArithmeticError):
             log.exception("feature construction failed")
-            result = self._unavailable(tx, cutoff, UnavailableReason.FEATURE_FAILURE,
-                                       None, None)
+            result = self._unavailable(
+                tx, cutoff, UnavailableReason.FEATURE_FAILURE, None, None
+            )
             return _Scored(result, None, UnavailableReason.FEATURE_FAILURE.value)
         scorer = self._scorer()
         if scorer is None:
-            result = self._unavailable(tx, cutoff, UnavailableReason.MODEL_UNAVAILABLE,
-                                       None, self._spec.version)
+            result = self._unavailable(
+                tx,
+                cutoff,
+                UnavailableReason.MODEL_UNAVAILABLE,
+                None,
+                self._spec.version,
+            )
             return _Scored(result, snapshot, None)
         try:
             value = scorer.score(snapshot)
@@ -2373,27 +2724,47 @@ class IngestService:
         except Exception:
             # Any model runtime failure must become an explicit unavailable result.
             log.exception("model scoring failed")
-            result = self._unavailable(tx, cutoff, UnavailableReason.MODEL_UNAVAILABLE,
-                                       scorer.model_version, self._spec.version)
+            result = self._unavailable(
+                tx,
+                cutoff,
+                UnavailableReason.MODEL_UNAVAILABLE,
+                scorer.model_version,
+                self._spec.version,
+            )
             return _Scored(result, snapshot, None)
-        result = ScoreResult(tx.transaction_id, cutoff, ScoreStatus.AVAILABLE, value,
-                             RANKING_SEMANTICS, scorer.model_version, self._spec.version)
+        result = ScoreResult(
+            tx.transaction_id,
+            cutoff,
+            ScoreStatus.AVAILABLE,
+            value,
+            RANKING_SEMANTICS,
+            scorer.model_version,
+            self._spec.version,
+        )
         return _Scored(result, snapshot, None)
 
-    def record_audit(self, *, request_id: str, category: str, route: str,
-                     supplier_id: str | None) -> None:
+    def record_audit(
+        self, *, request_id: str, category: str, route: str, supplier_id: str | None
+    ) -> None:
         """Best effort: an audit outage must not be reported as a durable event."""
         try:
             conn = self._connect()
             try:
-                db.insert_audit(conn, request_id=request_id, category=category,
-                                route=route, supplier_id=supplier_id)
+                db.insert_audit(
+                    conn,
+                    request_id=request_id,
+                    category=category,
+                    route=route,
+                    supplier_id=supplier_id,
+                )
                 conn.commit()
             finally:
                 self._release(conn)
         except psycopg.OperationalError:
-            log.warning("audit event not stored", extra={"request_id": request_id,
-                                                          "category": category})
+            log.warning(
+                "audit event not stored",
+                extra={"request_id": request_id, "category": category},
+            )
 ```
 
 - [ ] **Step 4: Run tests**
@@ -2472,20 +2843,33 @@ AUTH = {"Authorization": "Bearer token-s1"}
 @pytest.fixture
 def client(db_conn: Conn, database_url: str) -> TestClient:
     from fraud_detection.db import connect
-    service = IngestService(connect=lambda: connect(database_url), scorer=CountScorer,
-                            spec=CUST_HIST_V1, late_after=timedelta(hours=24),
-                            clock=lambda: datetime.now(UTC), env_tag="test")
-    app = create_app(service=service,
-                     supplier_tokens={"s1": "token-s1", "s2": "token-s2"},
-                     limiter=FixedWindowRateLimiter(5, 60), ready=lambda: True,
-                     clock=lambda: datetime.now(UTC))
+
+    service = IngestService(
+        connect=lambda: connect(database_url),
+        scorer=CountScorer,
+        spec=CUST_HIST_V1,
+        late_after=timedelta(hours=24),
+        clock=lambda: datetime.now(UTC),
+        env_tag="test",
+    )
+    app = create_app(
+        service=service,
+        supplier_tokens={"s1": "token-s1", "s2": "token-s2"},
+        limiter=FixedWindowRateLimiter(5, 60),
+        ready=lambda: True,
+        clock=lambda: datetime.now(UTC),
+    )
     return TestClient(app)
 
 
 def body(**overrides: Any) -> dict[str, Any]:
-    base = {"transaction_id": "t1", "customer_id": "c1",
-            "occurred_at": datetime.now(UTC).isoformat(), "amount": "25.00",
-            "currency": "XTS"}
+    base = {
+        "transaction_id": "t1",
+        "customer_id": "c1",
+        "occurred_at": datetime.now(UTC).isoformat(),
+        "amount": "25.00",
+        "currency": "XTS",
+    }
     return base | overrides
 
 
@@ -2501,8 +2885,9 @@ def test_create_then_retry_then_conflict(client: TestClient) -> None:
     assert retry.status_code == 200
     assert retry.json()["score"] == data["score"]
     assert retry.json()["request_id"] != data["request_id"]
-    conflict = client.post("/v1/transactions", json=payload | {"amount": "26.00"},
-                           headers=AUTH)
+    conflict = client.post(
+        "/v1/transactions", json=payload | {"amount": "26.00"}, headers=AUTH
+    )
     assert conflict.status_code == 409
     assert conflict.json()["error"]["code"] == "transaction_conflict"
 
@@ -2516,8 +2901,9 @@ def test_every_response_has_request_id_and_no_store(client: TestClient) -> None:
 
 
 def test_invalid_token_is_401(client: TestClient) -> None:
-    response = client.post("/v1/transactions", json=body(),
-                           headers={"Authorization": "Bearer wrong"})
+    response = client.post(
+        "/v1/transactions", json=body(), headers={"Authorization": "Bearer wrong"}
+    )
     assert response.status_code == 401
 
 
@@ -2527,8 +2913,9 @@ def test_auth_is_checked_before_validation(client: TestClient) -> None:
 
 
 @pytest.mark.parametrize("amount", ["0", "-5.00", "NaN", "1.234", "Infinity"])
-def test_invalid_amounts_are_rejected(client: TestClient, db_conn: Conn,
-                                      amount: str) -> None:
+def test_invalid_amounts_are_rejected(
+    client: TestClient, db_conn: Conn, amount: str
+) -> None:
     response = client.post("/v1/transactions", json=body(amount=amount), headers=AUTH)
     assert response.status_code == 422
     row = db_conn.execute("SELECT count(*) AS n FROM transactions").fetchone()
@@ -2541,30 +2928,36 @@ def test_unknown_field_and_label_are_rejected(client: TestClient) -> None:
 
 
 def test_naive_timestamp_is_rejected(client: TestClient) -> None:
-    response = client.post("/v1/transactions",
-                           json=body(occurred_at="2026-09-01T12:00:00"), headers=AUTH)
+    response = client.post(
+        "/v1/transactions", json=body(occurred_at="2026-09-01T12:00:00"), headers=AUTH
+    )
     assert response.status_code == 422
 
 
 def test_far_future_event_is_rejected(client: TestClient) -> None:
     future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
-    response = client.post("/v1/transactions", json=body(occurred_at=future),
-                           headers=AUTH)
+    response = client.post(
+        "/v1/transactions", json=body(occurred_at=future), headers=AUTH
+    )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "occurred_at_in_future"
 
 
 def test_oversized_body_is_413(client: TestClient) -> None:
-    response = client.post("/v1/transactions", content=b"x" * 9000,
-                           headers=AUTH | {"Content-Type": "application/json"})
+    response = client.post(
+        "/v1/transactions",
+        content=b"x" * 9000,
+        headers=AUTH | {"Content-Type": "application/json"},
+    )
     assert response.status_code == 413
 
 
 def test_rate_limit_is_429_with_retry_after(client: TestClient) -> None:
     for i in range(5):
         client.post("/v1/transactions", json=body(transaction_id=f"r{i}"), headers=AUTH)
-    response = client.post("/v1/transactions", json=body(transaction_id="r9"),
-                           headers=AUTH)
+    response = client.post(
+        "/v1/transactions", json=body(transaction_id="r9"), headers=AUTH
+    )
     assert response.status_code == 429
     assert int(response.headers["Retry-After"]) >= 1
 
@@ -2583,13 +2976,22 @@ def test_health_endpoints(client: TestClient) -> None:
 
 def test_store_down_is_503(db_conn: Conn) -> None:
     from fraud_detection.db import connect
+
     service = IngestService(
         connect=lambda: connect("postgresql://nobody@127.0.0.1:1/none"),
-        scorer=CountScorer, spec=CUST_HIST_V1, late_after=timedelta(hours=24),
-        clock=lambda: datetime.now(UTC), env_tag="test")
-    app = create_app(service=service, supplier_tokens={"s1": "token-s1"},
-                     limiter=FixedWindowRateLimiter(5, 60), ready=lambda: False,
-                     clock=lambda: datetime.now(UTC))
+        scorer=CountScorer,
+        spec=CUST_HIST_V1,
+        late_after=timedelta(hours=24),
+        clock=lambda: datetime.now(UTC),
+        env_tag="test",
+    )
+    app = create_app(
+        service=service,
+        supplier_tokens={"s1": "token-s1"},
+        limiter=FixedWindowRateLimiter(5, 60),
+        ready=lambda: False,
+        clock=lambda: datetime.now(UTC),
+    )
     client = TestClient(app)
     response = client.post("/v1/transactions", json=body(), headers=AUTH)
     assert response.status_code == 503
@@ -2617,8 +3019,12 @@ from collections.abc import Callable
 
 
 class FixedWindowRateLimiter:
-    def __init__(self, limit: int, window_seconds: int,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        limit: int,
+        window_seconds: int,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         if limit <= 0 or window_seconds <= 0:
             raise ValueError("limit and window_seconds must be positive")
         self._limit = limit
@@ -2657,7 +3063,11 @@ from starlette.concurrency import run_in_threadpool
 
 from fraud_detection.ratelimit import FixedWindowRateLimiter
 from fraud_detection.service import (
-    IngestOutcome, IngestService, IngestStatus, StoreUnavailable, TransactionConflict,
+    IngestOutcome,
+    IngestService,
+    IngestStatus,
+    StoreUnavailable,
+    TransactionConflict,
     TransactionInput,
 )
 
@@ -2671,24 +3081,37 @@ class TransactionIn(BaseModel):
     transaction_id: Annotated[str, Field(pattern=ID_PATTERN)]
     customer_id: Annotated[str, Field(pattern=ID_PATTERN)]
     occurred_at: AwareDatetime
-    amount: Annotated[Decimal, Field(gt=0, max_digits=18, decimal_places=2,
-                                     allow_inf_nan=False)]
+    amount: Annotated[
+        Decimal, Field(gt=0, max_digits=18, decimal_places=2, allow_inf_nan=False)
+    ]
     currency: Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
 
 
 class ApiError(Exception):
-    def __init__(self, status: int, code: str, message: str,
-                 headers: Mapping[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        message: str,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
         self.status, self.code, self.message = status, code, message
         self.headers = dict(headers or {})
 
 
-def _error(request: Request, status: int, code: str, message: str,
-           headers: Mapping[str, str] | None = None) -> JSONResponse:
+def _error(
+    request: Request,
+    status: int,
+    code: str,
+    message: str,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
     return JSONResponse(
         status_code=status,
-        content={"error": {"code": code, "message": message},
-                 "request_id": request.state.request_id},
+        content={
+            "error": {"code": code, "message": message},
+            "request_id": request.state.request_id,
+        },
         headers=dict(headers or {}),
     )
 
@@ -2704,16 +3127,24 @@ def _body(outcome: IngestOutcome, request_id: str) -> dict[str, Any]:
         "score_kind": "ranking",
         "model_version": r.model_version,
         "feature_version": r.feature_version,
-        "history_status": outcome.history_status.value if outcome.history_status else None,
+        "history_status": outcome.history_status.value
+        if outcome.history_status
+        else None,
         "request_id": request_id,
         "notice": NOTICE,
     }
 
 
-def create_app(*, service: IngestService, supplier_tokens: Mapping[str, str],
-               limiter: FixedWindowRateLimiter, ready: Callable[[], bool],
-               clock: Callable[[], datetime], max_body_bytes: int = 8192,
-               future_tolerance: timedelta = timedelta(minutes=5)) -> FastAPI:
+def create_app(
+    *,
+    service: IngestService,
+    supplier_tokens: Mapping[str, str],
+    limiter: FixedWindowRateLimiter,
+    ready: Callable[[], bool],
+    clock: Callable[[], datetime],
+    max_body_bytes: int = 8192,
+    future_tolerance: timedelta = timedelta(minutes=5),
+) -> FastAPI:
     app = FastAPI(title="Fraud-risk shadow API", docs_url=None, redoc_url=None)
     tokens = dict(supplier_tokens)
 
@@ -2727,14 +3158,16 @@ def create_app(*, service: IngestService, supplier_tokens: Mapping[str, str],
         raise ApiError(401, "unauthenticated", "valid bearer token required")
 
     @app.middleware("http")
-    async def request_context(request: Request,
-                              call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def request_context(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         request.state.request_id = str(uuid.uuid4())
         request.state.supplier_id = None
         length = request.headers.get("content-length")
         if length is not None and int(length) > max_body_bytes:
-            response: Response = _error(request, 413, "payload_too_large",
-                                        "request body too large")
+            response: Response = _error(
+                request, 413, "payload_too_large", "request body too large"
+            )
         else:
             response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
@@ -2742,8 +3175,12 @@ def create_app(*, service: IngestService, supplier_tokens: Mapping[str, str],
         return response
 
     def audit(request: Request, category: str) -> None:
-        service.record_audit(request_id=request.state.request_id, category=category,
-                             route=request.url.path, supplier_id=request.state.supplier_id)
+        service.record_audit(
+            request_id=request.state.request_id,
+            category=category,
+            route=request.url.path,
+            supplier_id=request.state.supplier_id,
+        )
 
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError) -> JSONResponse:
@@ -2767,30 +3204,48 @@ def create_app(*, service: IngestService, supplier_tokens: Mapping[str, str],
         request.state.supplier_id = supplier_id
         retry_after = limiter.check(supplier_id)
         if retry_after is not None:
-            raise ApiError(429, "rate_limited", "rate limit exceeded",
-                           {"Retry-After": str(retry_after)})
+            raise ApiError(
+                429,
+                "rate_limited",
+                "rate limit exceeded",
+                {"Retry-After": str(retry_after)},
+            )
         raw = await request.body()
         if len(raw) > max_body_bytes:  # chunked bodies bypass content-length
             raise ApiError(413, "payload_too_large", "request body too large")
         try:
             payload = TransactionIn.model_validate_json(raw)
         except ValidationError as exc:
-            raise ApiError(422, "invalid_request", "request fields are invalid") from exc
+            raise ApiError(
+                422, "invalid_request", "request fields are invalid"
+            ) from exc
         if payload.occurred_at > clock() + future_tolerance:
             raise ApiError(422, "occurred_at_in_future", "occurred_at is in the future")
-        tx = TransactionInput(payload.transaction_id, payload.customer_id,
-                              payload.occurred_at, payload.amount, payload.currency)
+        tx = TransactionInput(
+            payload.transaction_id,
+            payload.customer_id,
+            payload.occurred_at,
+            payload.amount,
+            payload.currency,
+        )
         try:
             outcome = await run_in_threadpool(service.ingest, supplier_id, tx)
         except TransactionConflict as exc:
-            raise ApiError(409, "transaction_conflict",
-                           "transaction_id already used with different content") from exc
+            raise ApiError(
+                409,
+                "transaction_conflict",
+                "transaction_id already used with different content",
+            ) from exc
         except StoreUnavailable as exc:
-            raise ApiError(503, "store_unavailable",
-                           "acceptance not confirmed; retry with the same request") from exc
+            raise ApiError(
+                503,
+                "store_unavailable",
+                "acceptance not confirmed; retry with the same request",
+            ) from exc
         status = 201 if outcome.status is IngestStatus.CREATED else 200
-        return JSONResponse(status_code=status,
-                            content=_body(outcome, request.state.request_id))
+        return JSONResponse(
+            status_code=status, content=_body(outcome, request.state.request_id)
+        )
 
     @app.get("/health/live")
     def live() -> dict[str, str]:
@@ -2854,18 +3309,32 @@ pytestmark = pytest.mark.integration
 
 def source() -> pd.DataFrame:
     start = datetime(2018, 4, 1, tzinfo=UTC)
-    rows = [{"TRANSACTION_ID": str(i), "CUSTOMER_ID": str(i % 4),
-             "TX_DATETIME": start + timedelta(hours=7 * i), "TX_AMOUNT": 5.0 + i,
-             "TX_FRAUD": 0} for i in range(120)]
+    rows = [
+        {
+            "TRANSACTION_ID": str(i),
+            "CUSTOMER_ID": str(i % 4),
+            "TX_DATETIME": start + timedelta(hours=7 * i),
+            "TX_AMOUNT": 5.0 + i,
+            "TX_FRAUD": 0,
+        }
+        for i in range(120)
+    ]
     rows.append({**rows[-1], "TRANSACTION_ID": "tie"})
     return pd.DataFrame(rows)
 
 
-def test_seeded_snapshots_match_offline_features(db_conn: Conn, database_url: str) -> None:
+def test_seeded_snapshots_match_offline_features(
+    db_conn: Conn, database_url: str
+) -> None:
     src = source()
-    service = IngestService(connect=lambda: connect(database_url), scorer=CountScorer,
-                            spec=CUST_HIST_V1, late_after=timedelta(days=36500),
-                            clock=lambda: datetime.now(UTC), env_tag="local_sim")
+    service = IngestService(
+        connect=lambda: connect(database_url),
+        scorer=CountScorer,
+        spec=CUST_HIST_V1,
+        late_after=timedelta(days=36500),
+        clock=lambda: datetime.now(UTC),
+        env_tag="local_sim",
+    )
     assert seed_frame(service, src, "local-sim") == len(src)
     offline = build_feature_frame(src, CUST_HIST_V1)
     assert parity_mismatches(db_conn, offline, "local-sim", CUST_HIST_V1) == []
@@ -2901,15 +3370,21 @@ def seed_frame(service: IngestService, frame: pd.DataFrame, supplier_id: str) ->
     count = 0
     for r in ordered.itertuples(index=False):
         at = r.TX_DATETIME.to_pydatetime()
-        tx = TransactionInput(str(r.TRANSACTION_ID), str(r.CUSTOMER_ID), at,
-                              Decimal(f"{r.TX_AMOUNT:.2f}"), SIMULATED_CURRENCY)
+        tx = TransactionInput(
+            str(r.TRANSACTION_ID),
+            str(r.CUSTOMER_ID),
+            at,
+            Decimal(f"{r.TX_AMOUNT:.2f}"),
+            SIMULATED_CURRENCY,
+        )
         service.ingest(supplier_id, tx, simulated_at=at)
         count += 1
     return count
 
 
-def parity_mismatches(conn: Conn, frame: pd.DataFrame, supplier_id: str,
-                      spec: FeatureSpec) -> list[str]:
+def parity_mismatches(
+    conn: Conn, frame: pd.DataFrame, supplier_id: str, spec: FeatureSpec
+) -> list[str]:
     rows = conn.execute(
         "SELECT transaction_id, feature_values FROM feature_snapshots"
         " WHERE supplier_id = %s AND feature_values IS NOT NULL",
@@ -2999,9 +3474,11 @@ class ModelHolder:
     def __init__(self, settings: Settings) -> None:
         self._model: ModelArtifact | None = None
         try:
-            self._model = load_artifact(Path(settings.model_dir),
-                                        expected_digest=settings.model_digest,
-                                        expected_spec=CUST_HIST_V1)
+            self._model = load_artifact(
+                Path(settings.model_dir),
+                expected_digest=settings.model_digest,
+                expected_spec=CUST_HIST_V1,
+            )
         except (ArtifactError, OSError):
             log.exception("model artifact failed to load; service stays unready")
 
@@ -3014,7 +3491,9 @@ def create() -> FastAPI:
     pool: ConnectionPool[Conn] = ConnectionPool(
         settings.database_url,
         kwargs={"row_factory": dict_row, "autocommit": False},
-        min_size=1, max_size=10, open=True,
+        min_size=1,
+        max_size=10,
+        open=True,
     )
     with pool.connection() as conn:
         apply_schema(conn)
@@ -3031,15 +3510,21 @@ def create() -> FastAPI:
         return True
 
     service = IngestService(
-        connect=pool.getconn, release=pool.putconn, scorer=models.current,
-        spec=CUST_HIST_V1, late_after=timedelta(seconds=settings.late_after_seconds),
-        clock=lambda: datetime.now(UTC), env_tag=settings.env_tag,
+        connect=pool.getconn,
+        release=pool.putconn,
+        scorer=models.current,
+        spec=CUST_HIST_V1,
+        late_after=timedelta(seconds=settings.late_after_seconds),
+        clock=lambda: datetime.now(UTC),
+        env_tag=settings.env_tag,
     )
     tokens = json.loads(Path(settings.supplier_tokens_file).read_text())
     return create_app(
-        service=service, supplier_tokens=tokens,
+        service=service,
+        supplier_tokens=tokens,
         limiter=FixedWindowRateLimiter(settings.rate_limit_per_minute, 60),
-        ready=ready, clock=lambda: datetime.now(UTC),
+        ready=ready,
+        clock=lambda: datetime.now(UTC),
         max_body_bytes=settings.max_body_bytes,
     )
 ```
@@ -3133,11 +3618,16 @@ CLI additions. Seeding uses the **validated source** validation period, sent thr
 
 ```python
 def _validation_source(args: argparse.Namespace) -> "pd.DataFrame":
-    from fraud_detection.data import load_reviewed_files, read_pins, validate_source_frame
+    from fraud_detection.data import (
+        load_reviewed_files,
+        read_pins,
+        validate_source_frame,
+    )
     from fraud_detection.offline import chronological_split
 
     source = validate_source_frame(
-        load_reviewed_files(read_pins(Path(args.pins)), Path(args.raw_dir)))
+        load_reviewed_files(read_pins(Path(args.pins)), Path(args.raw_dir))
+    )
     parts, _ = chronological_split(source)
     return parts.validation
 
@@ -3150,12 +3640,19 @@ def _seed(args: argparse.Namespace) -> int:
     from fraud_detection.service import IngestService
     from fraud_detection.simulation import SIMULATED_SUPPLIER_ID
 
-    model = load_artifact(Path(args.model_dir), expected_digest=args.model_digest,
-                          expected_spec=CUST_HIST_V1)
-    service = IngestService(connect=lambda: connect(args.database_url),
-                            scorer=lambda: model, spec=CUST_HIST_V1,
-                            late_after=timedelta(days=36500),
-                            clock=lambda: datetime.now(UTC), env_tag="local_sim")
+    model = load_artifact(
+        Path(args.model_dir),
+        expected_digest=args.model_digest,
+        expected_spec=CUST_HIST_V1,
+    )
+    service = IngestService(
+        connect=lambda: connect(args.database_url),
+        scorer=lambda: model,
+        spec=CUST_HIST_V1,
+        late_after=timedelta(days=36500),
+        clock=lambda: datetime.now(UTC),
+        env_tag="local_sim",
+    )
     count = seed_frame(service, _validation_source(args), SIMULATED_SUPPLIER_ID)
     print(f"seeded {count} transactions")
     return 0
@@ -3171,8 +3668,9 @@ def _parity_check(args: argparse.Namespace) -> int:
     # Rebuild offline features from exactly the seeded rows, so both sides
     # saw the same history.
     offline = build_feature_frame(_validation_source(args), CUST_HIST_V1)
-    problems = parity_mismatches(connect(args.database_url), offline,
-                                 SIMULATED_SUPPLIER_ID, CUST_HIST_V1)
+    problems = parity_mismatches(
+        connect(args.database_url), offline, SIMULATED_SUPPLIER_ID, CUST_HIST_V1
+    )
     print(f"{len(problems)} mismatches")
     for line in problems[:20]:
         print(line)
@@ -3237,7 +3735,8 @@ def test_json_log_has_request_id_and_no_payload() -> None:
 def test_score_counter_labels_are_bounded() -> None:
     SCORE_RESULTS.labels(status="unavailable", reason="late").inc()
     value = REGISTRY.get_sample_value(
-        "fraud_score_results_total", {"status": "unavailable", "reason": "late"})
+        "fraud_score_results_total", {"status": "unavailable", "reason": "late"}
+    )
     assert value is not None and value >= 1
 ```
 
@@ -3253,22 +3752,33 @@ from prometheus_client import Counter, Histogram, start_http_server
 
 REQUESTS = Counter("fraud_requests_total", "HTTP requests", ["route", "status"])
 REQUEST_SECONDS = Histogram("fraud_request_seconds", "Request duration", ["route"])
-SCORE_RESULTS = Counter("fraud_score_results", "Original score results",
-                        ["status", "reason"])
+SCORE_RESULTS = Counter(
+    "fraud_score_results", "Original score results", ["status", "reason"]
+)
 HISTORY_STATUS = Counter("fraud_history_status", "History status", ["status"])
 CONFLICTS = Counter("fraud_conflicts", "Same-ID different-content requests")
 RETRIES = Counter("fraud_retries", "Identical retries")
 MODEL_LOAD_FAILURES = Counter("fraud_model_load_failures", "Model load failures")
 REPLAY_FAILURES = Counter("fraud_replay_failures", "Replay failures")
 
-_SAFE_EXTRAS = ("request_id", "route", "status", "category", "supplier_id",
-                "duration_ms", "model_version")
+_SAFE_EXTRAS = (
+    "request_id",
+    "route",
+    "status",
+    "category",
+    "supplier_id",
+    "duration_ms",
+    "model_version",
+)
 
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        data: dict[str, object] = {"level": record.levelname, "logger": record.name,
-                                   "message": record.getMessage()}
+        data: dict[str, object] = {
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
         for key in _SAFE_EXTRAS:
             if hasattr(record, key):
                 data[key] = getattr(record, key)
@@ -3298,9 +3808,11 @@ Add a test in `tests/test_api.py`:
 ```python
 def test_metrics_are_recorded(client: TestClient) -> None:
     from prometheus_client import REGISTRY
+
     client.post("/v1/transactions", json=body(transaction_id="m1"), headers=AUTH)
     value = REGISTRY.get_sample_value(
-        "fraud_requests_total", {"route": "/v1/transactions", "status": "201"})
+        "fraud_requests_total", {"route": "/v1/transactions", "status": "201"}
+    )
     assert value is not None and value >= 1
 ```
 
@@ -3409,27 +3921,44 @@ pytestmark = pytest.mark.integration
 T0 = datetime(2026, 9, 1, tzinfo=UTC)
 
 
-def outcome(rid: str, tx: str, status: OutcomeStatus, days: int,
-            supersedes: str | None = None) -> OutcomeRecord:
-    return OutcomeRecord(rid, T0, T0 + timedelta(days=days), tx, status,
-                         "case-1", supersedes)
+def outcome(
+    rid: str, tx: str, status: OutcomeStatus, days: int, supersedes: str | None = None
+) -> OutcomeRecord:
+    return OutcomeRecord(
+        rid, T0, T0 + timedelta(days=days), tx, status, "case-1", supersedes
+    )
 
 
 def seed(database_url: str, n: int) -> None:
-    service = IngestService(connect=lambda: connect(database_url), scorer=CountScorer,
-                            spec=CUST_HIST_V1, late_after=timedelta(days=3650),
-                            clock=lambda: T0, env_tag="test")
+    service = IngestService(
+        connect=lambda: connect(database_url),
+        scorer=CountScorer,
+        spec=CUST_HIST_V1,
+        late_after=timedelta(days=3650),
+        clock=lambda: T0,
+        env_tag="test",
+    )
     for i in range(n):
         at = T0 + timedelta(minutes=i)
-        service.ingest("s1", TransactionInput(f"t{i}", "c1", at, Decimal("5.00"), "XTS"),
-                       simulated_at=at)
+        service.ingest(
+            "s1",
+            TransactionInput(f"t{i}", "c1", at, Decimal("5.00"), "XTS"),
+            simulated_at=at,
+        )
 
 
-def test_unknown_outcomes_are_not_counted_as_legitimate(db_conn: Conn,
-                                                        database_url: str) -> None:
+def test_unknown_outcomes_are_not_counted_as_legitimate(
+    db_conn: Conn, database_url: str
+) -> None:
     seed(database_url, 4)
-    import_outcomes(db_conn, "s1", [outcome("o0", "t0", OutcomeStatus.LEGITIMATE, 1),
-                                    outcome("o3", "t3", OutcomeStatus.FRAUD, 1)])
+    import_outcomes(
+        db_conn,
+        "s1",
+        [
+            outcome("o0", "t0", OutcomeStatus.LEGITIMATE, 1),
+            outcome("o3", "t3", OutcomeStatus.FRAUD, 1),
+        ],
+    )
     report = evaluate_saved_scores(db_conn, "s1", T0 + timedelta(days=2), k=1)
     metrics = report["test-model"]
     assert metrics["n"] == 2.0 and metrics["unknown"] == 2.0
@@ -3437,18 +3966,29 @@ def test_unknown_outcomes_are_not_counted_as_legitimate(db_conn: Conn,
 
 def test_outcome_not_yet_available_is_unknown(db_conn: Conn, database_url: str) -> None:
     seed(database_url, 2)
-    import_outcomes(db_conn, "s1", [outcome("o0", "t0", OutcomeStatus.LEGITIMATE, 1),
-                                    outcome("o1", "t1", OutcomeStatus.FRAUD, 10)])
+    import_outcomes(
+        db_conn,
+        "s1",
+        [
+            outcome("o0", "t0", OutcomeStatus.LEGITIMATE, 1),
+            outcome("o1", "t1", OutcomeStatus.FRAUD, 10),
+        ],
+    )
     report = evaluate_saved_scores(db_conn, "s1", T0 + timedelta(days=2), k=1)
     assert report["test-model"]["insufficient_labels"] == 1.0
 
 
 def test_correction_supersedes_prior_outcome(db_conn: Conn, database_url: str) -> None:
     seed(database_url, 2)
-    import_outcomes(db_conn, "s1", [
-        outcome("o0", "t0", OutcomeStatus.FRAUD, 1),
-        outcome("o0b", "t0", OutcomeStatus.LEGITIMATE, 2, supersedes="o0"),
-        outcome("o1", "t1", OutcomeStatus.FRAUD, 1)])
+    import_outcomes(
+        db_conn,
+        "s1",
+        [
+            outcome("o0", "t0", OutcomeStatus.FRAUD, 1),
+            outcome("o0b", "t0", OutcomeStatus.LEGITIMATE, 2, supersedes="o0"),
+            outcome("o1", "t1", OutcomeStatus.FRAUD, 1),
+        ],
+    )
     report = evaluate_saved_scores(db_conn, "s1", T0 + timedelta(days=3), k=1)
     assert report["test-model"]["prevalence"] == 0.5
 
@@ -3478,28 +4018,48 @@ pytestmark = pytest.mark.integration
 T0 = datetime(2026, 9, 1, tzinfo=UTC)
 
 
-def test_replay_adds_record_without_rewriting_original(db_conn: Conn,
-                                                       database_url: str) -> None:
-    service = IngestService(connect=lambda: connect(database_url), scorer=lambda: None,
-                            spec=CUST_HIST_V1, late_after=timedelta(days=3650),
-                            clock=lambda: T0, env_tag="test")
-    service.ingest("s1", TransactionInput("t1", "c1", T0, Decimal("5.00"), "XTS"),
-                   simulated_at=T0)
-    assert replay_unavailable(db_conn, "s1", CountScorer(), T0 + timedelta(hours=1)) == 1
+def test_replay_adds_record_without_rewriting_original(
+    db_conn: Conn, database_url: str
+) -> None:
+    service = IngestService(
+        connect=lambda: connect(database_url),
+        scorer=lambda: None,
+        spec=CUST_HIST_V1,
+        late_after=timedelta(days=3650),
+        clock=lambda: T0,
+        env_tag="test",
+    )
+    service.ingest(
+        "s1", TransactionInput("t1", "c1", T0, Decimal("5.00"), "XTS"), simulated_at=T0
+    )
+    assert (
+        replay_unavailable(db_conn, "s1", CountScorer(), T0 + timedelta(hours=1)) == 1
+    )
     original = fetch_original(db_conn, "s1", "t1")
     assert original is not None and original.result.score is None
-    rows = db_conn.execute("SELECT kind, status FROM score_results ORDER BY id").fetchall()
+    rows = db_conn.execute(
+        "SELECT kind, status FROM score_results ORDER BY id"
+    ).fetchall()
     assert [(r["kind"], r["status"]) for r in rows] == [
-        ("original", "unavailable"), ("replay", "available")]
+        ("original", "unavailable"),
+        ("replay", "available"),
+    ]
     history = db_conn.execute("SELECT count(*) AS n FROM transactions").fetchone()
     assert history is not None and history["n"] == 1
-    assert replay_unavailable(db_conn, "s1", CountScorer(), T0 + timedelta(hours=2)) == 0
+    assert (
+        replay_unavailable(db_conn, "s1", CountScorer(), T0 + timedelta(hours=2)) == 0
+    )
 
 
 def test_late_originals_are_not_replayed(db_conn: Conn, database_url: str) -> None:
-    service = IngestService(connect=lambda: connect(database_url), scorer=CountScorer,
-                            spec=CUST_HIST_V1, late_after=timedelta(hours=1),
-                            clock=lambda: T0, env_tag="test")
+    service = IngestService(
+        connect=lambda: connect(database_url),
+        scorer=CountScorer,
+        spec=CUST_HIST_V1,
+        late_after=timedelta(hours=1),
+        clock=lambda: T0,
+        env_tag="test",
+    )
     old = T0 - timedelta(days=2)
     service.ingest("s1", TransactionInput("t1", "c1", old, Decimal("5.00"), "XTS"))
     assert replay_unavailable(db_conn, "s1", CountScorer(), T0) == 0
@@ -3546,7 +4106,9 @@ def read_outcome_csv(path: Path) -> list[OutcomeRecord]:
         ]
 
 
-def import_outcomes(conn: Conn, supplier_id: str, records: Sequence[OutcomeRecord]) -> int:
+def import_outcomes(
+    conn: Conn, supplier_id: str, records: Sequence[OutcomeRecord]
+) -> int:
     inserted = 0
     for r in sorted(records, key=lambda rec: rec.available_at):
         row = conn.execute(
@@ -3554,8 +4116,16 @@ def import_outcomes(conn: Conn, supplier_id: str, records: Sequence[OutcomeRecor
             INSERT INTO outcomes VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (record_id) DO NOTHING RETURNING record_id
             """,
-            (r.record_id, supplier_id, r.transaction_id, r.status.value,
-             r.evidence_reference, r.effective_at, r.available_at, r.supersedes_id),
+            (
+                r.record_id,
+                supplier_id,
+                r.transaction_id,
+                r.status.value,
+                r.evidence_reference,
+                r.effective_at,
+                r.available_at,
+                r.supersedes_id,
+            ),
         ).fetchone()
         inserted += row is not None
     conn.commit()
@@ -3577,8 +4147,9 @@ def simulated_outcomes(frame: pd.DataFrame) -> list[OutcomeRecord]:
     ]
 
 
-def evaluate_saved_scores(conn: Conn, supplier_id: str, as_of: datetime,
-                          k: int) -> dict[str, dict[str, float]]:
+def evaluate_saved_scores(
+    conn: Conn, supplier_id: str, as_of: datetime, k: int
+) -> dict[str, dict[str, float]]:
     scores = conn.execute(
         """
         SELECT transaction_id, model_version, score FROM score_results
@@ -3589,16 +4160,27 @@ def evaluate_saved_scores(conn: Conn, supplier_id: str, as_of: datetime,
     rows = conn.execute(
         "SELECT * FROM outcomes WHERE supplier_id = %s", (supplier_id,)
     ).fetchall()
-    records = [OutcomeRecord(r["record_id"], r["effective_at"], r["available_at"],
-                             r["transaction_id"], OutcomeStatus(r["status"]),
-                             r["evidence_reference"], r["supersedes_id"]) for r in rows]
+    records = [
+        OutcomeRecord(
+            r["record_id"],
+            r["effective_at"],
+            r["available_at"],
+            r["transaction_id"],
+            OutcomeStatus(r["status"]),
+            r["evidence_reference"],
+            r["supersedes_id"],
+        )
+        for r in rows
+    ]
     by_tx: dict[str, list[OutcomeRecord]] = defaultdict(list)
     for rec in records:
         by_tx[rec.transaction_id].append(rec)
     grouped: dict[str, tuple[list[int], list[float], int]] = {}
     for s in scores:
         labels, values, unknown = grouped.get(s["model_version"], ([], [], 0))
-        known = outcome_as_of(by_tx.get(s["transaction_id"], []), s["transaction_id"], as_of)
+        known = outcome_as_of(
+            by_tx.get(s["transaction_id"], []), s["transaction_id"], as_of
+        )
         if known is None or known.status is OutcomeStatus.DISPUTED:
             unknown += 1
         else:
@@ -3609,11 +4191,15 @@ def evaluate_saved_scores(conn: Conn, supplier_id: str, as_of: datetime,
     for version, (labels, values, unknown) in grouped.items():
         y = np.array(labels)
         if len(set(labels)) < 2 or len(labels) < k:
-            report[version] = {"insufficient_labels": 1.0, "unknown": float(unknown),
-                               "n": float(len(labels))}
+            report[version] = {
+                "insufficient_labels": 1.0,
+                "unknown": float(unknown),
+                "n": float(len(labels)),
+            }
             continue
         report[version] = ranking_metrics(y, np.array(values), k) | {
-            "unknown": float(unknown)}
+            "unknown": float(unknown)
+        }
     return report
 ```
 
@@ -3626,15 +4212,20 @@ from datetime import datetime
 
 from fraud_detection import db
 from fraud_detection.contracts import (
-    RANKING_SEMANTICS, HistoryStatus, ScoreKind, ScoreResult, ScoreStatus,
+    RANKING_SEMANTICS,
+    HistoryStatus,
+    ScoreKind,
+    ScoreResult,
+    ScoreStatus,
 )
 from fraud_detection.features import FeatureSnapshot
 from fraud_detection.observability import REPLAY_FAILURES
 from fraud_detection.service import Scorer
 
 
-def replay_unavailable(conn: db.Conn, supplier_id: str, scorer: Scorer,
-                       at: datetime) -> int:
+def replay_unavailable(
+    conn: db.Conn, supplier_id: str, scorer: Scorer, at: datetime
+) -> int:
     rows = conn.execute(
         """
         SELECT s.transaction_id, f.feature_version, f.decision_cutoff,
@@ -3655,17 +4246,31 @@ def replay_unavailable(conn: db.Conn, supplier_id: str, scorer: Scorer,
         if row["feature_version"] != scorer.spec.version:
             REPLAY_FAILURES.inc()
             continue
-        snapshot = FeatureSnapshot(row["feature_version"], row["decision_cutoff"],
-                                   HistoryStatus(row["history_status"]),
-                                   row["feature_values"])
+        snapshot = FeatureSnapshot(
+            row["feature_version"],
+            row["decision_cutoff"],
+            HistoryStatus(row["history_status"]),
+            row["feature_values"],
+        )
         try:
             value = scorer.score(snapshot)
         except Exception:
             REPLAY_FAILURES.inc()
             continue
-        db.insert_score(conn, supplier_id, ScoreResult(
-            row["transaction_id"], at, ScoreStatus.AVAILABLE, value, RANKING_SEMANTICS,
-            scorer.model_version, scorer.spec.version, kind=ScoreKind.REPLAY))
+        db.insert_score(
+            conn,
+            supplier_id,
+            ScoreResult(
+                row["transaction_id"],
+                at,
+                ScoreStatus.AVAILABLE,
+                value,
+                RANKING_SEMANTICS,
+                scorer.model_version,
+                scorer.spec.version,
+                kind=ScoreKind.REPLAY,
+            ),
+        )
         replayed += 1
     conn.commit()
     return replayed
@@ -3685,7 +4290,9 @@ from evidently import Report
 from evidently.presets import DataDriftPreset, DataSummaryPreset
 
 
-def write_drift_report(reference: pd.DataFrame, current: pd.DataFrame, out: Path) -> None:
+def write_drift_report(
+    reference: pd.DataFrame, current: pd.DataFrame, out: Path
+) -> None:
     report = Report([DataSummaryPreset(), DataDriftPreset()])
     result = report.run(current_data=current, reference_data=reference)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -3769,22 +4376,38 @@ def model(seed: int) -> Pipeline:
 
 def snapshot() -> FeatureSnapshot:
     values = {n: 1.0 for n in CUST_HIST_V1.feature_names}
-    return FeatureSnapshot("cust_hist_v1", datetime(2026, 1, 1, tzinfo=UTC),
-                           HistoryStatus.HAS_HISTORY, values)
+    return FeatureSnapshot(
+        "cust_hist_v1",
+        datetime(2026, 1, 1, tzinfo=UTC),
+        HistoryStatus.HAS_HISTORY,
+        values,
+    )
 
 
 def test_rollback_to_previous_artifact_restores_scores(tmp_path: Path) -> None:
-    d1 = write_artifact(tmp_path / "v1", model=model(0), spec=CUST_HIST_V1,
-                        model_version="v1", metadata={})
-    before = load_artifact(tmp_path / "v1", expected_digest=d1,
-                           expected_spec=CUST_HIST_V1).score(snapshot())
-    d2 = write_artifact(tmp_path / "v2", model=model(5), spec=CUST_HIST_V1,
-                        model_version="v2", metadata={})
+    d1 = write_artifact(
+        tmp_path / "v1",
+        model=model(0),
+        spec=CUST_HIST_V1,
+        model_version="v1",
+        metadata={},
+    )
+    before = load_artifact(
+        tmp_path / "v1", expected_digest=d1, expected_spec=CUST_HIST_V1
+    ).score(snapshot())
+    d2 = write_artifact(
+        tmp_path / "v2",
+        model=model(5),
+        spec=CUST_HIST_V1,
+        model_version="v2",
+        metadata={},
+    )
     (tmp_path / "v2" / "model.joblib").write_bytes(b"corrupt")
     with pytest.raises(ArtifactError):
         load_artifact(tmp_path / "v2", expected_digest=d2, expected_spec=CUST_HIST_V1)
-    after = load_artifact(tmp_path / "v1", expected_digest=d1,
-                          expected_spec=CUST_HIST_V1).score(snapshot())
+    after = load_artifact(
+        tmp_path / "v1", expected_digest=d1, expected_spec=CUST_HIST_V1
+    ).score(snapshot())
     assert after == before
 ```
 
